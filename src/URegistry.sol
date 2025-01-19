@@ -3,9 +3,11 @@ pragma solidity ^0.8.23;
 
 import "@openzeppelin/access/AccessControl.sol";
 import "./ENS.sol";
+// console log
+import "forge-std/console.sol";
 
 // Custom errors
-error NoResolverBeforeBlock(uint256 blockNumber);
+error NoResolverAtOrBeforeBlock(uint256 blockNumber);
 error NotOwnerOrApprovedController();
 error NotAnAuditor();
 
@@ -33,13 +35,26 @@ contract URegistry is AccessControl {
     // Resolver at or before the block number
     function getResolver(bytes32 node, uint256 blockNumber) external view returns (address, uint256) {
 
-        // find the resolver record at or before the block number
-        for (uint256 i = resolvers[node].length; i > 0; i--) {
-            if (resolvers[node][i-1].blockNumber <= blockNumber) {
-                return (resolvers[node][i-1].resolver, resolvers[node][i-1].blockNumber);
+        // Use a binary search to find the resolver at or before the block number
+        ResolverInfo[] storage resolverList = resolvers[node];
+        uint256 low = 0;
+        uint256 high = resolverList.length;
+
+        while (low < high) {
+            uint256 mid = (low + high) / 2;
+            if (resolverList[mid].blockNumber <= blockNumber) {
+                low = mid + 1;
+            } else {
+                high = mid;
             }
         }
-        revert NoResolverBeforeBlock(blockNumber);
+
+        if (low == 0) {
+            revert NoResolverAtOrBeforeBlock(blockNumber);
+        }
+
+        ResolverInfo storage result = resolverList[low - 1];
+        return (result.resolver, result.blockNumber);
     }
 
     // Latest resolver
@@ -78,5 +93,11 @@ contract URegistry is AccessControl {
 
     function getAuditId(address resolver) external view returns (uint256) {
         return resolverAudits[resolver];
+    }
+
+    function getResolverLatest(bytes32 node) external view returns (address, uint256) {
+        require(resolvers[node].length > 0, "No resolvers available for this node");
+        ResolverInfo storage latestResolver = resolverList[resolvers[node].length - 1];
+        return (latestResolver.resolver, latestResolver.blockNumber);
     }
 }

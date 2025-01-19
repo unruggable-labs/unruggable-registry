@@ -7,7 +7,7 @@ import { ENS } from "../src/ENS.sol";
 import { MockENSRegistry } from "../src/MockENSRegistry.sol";
 import { BytesUtils } from "../src/BytesUtils.sol";
 // import custom errors
-import { NoResolverBeforeBlock, NotOwnerOrApprovedController, NotAnAuditor } from "../src/URegistry.sol";
+import { NoResolverAtOrBeforeBlock, NotOwnerOrApprovedController, NotAnAuditor } from "../src/URegistry.sol";
 
 contract URegistryTest is Test {
     using BytesUtils for bytes;
@@ -15,10 +15,19 @@ contract URegistryTest is Test {
     URegistry private registry;
     MockENSRegistry ens;
     address private ensOwner = address(0x1);
-    address private nameOwner = address(0x1);
-    address private auditor = address(0x2);
-    address private unauthorized = address(0x3);
-    address private resolver = address(0x4);
+    address private nameOwner = address(0x2);
+    address private auditor = address(0x3);
+    address private unauthorized = address(0x4);
+
+    // Resolver addresses
+    address private resolver = address(0x5);
+    address private resolver2 = address(0x6);
+    address private resolver3 = address(0x7);
+
+    // Block numbers for testing
+    uint256 private blocknumber = 1641070100;
+    uint256 private blocknumber2 = blocknumber + 100;
+    uint256 private blocknumber3 = blocknumber + 200;
 
     // DNS-encoded name for "example.eth" using string literal format
     bytes private dnsEncodedName = "\x07example\x03eth\x00";
@@ -28,8 +37,8 @@ contract URegistryTest is Test {
 
     function setUp() public {
 
-        vm.warp(1641070800); 
         vm.startPrank(ensOwner);
+        vm.roll(blocknumber); 
         
         ens = new MockENSRegistry(ensOwner);
         registry = new URegistry(address(ens));
@@ -37,7 +46,6 @@ contract URegistryTest is Test {
 
         // Set initial resolver for the node in the mock registry
         ens.setOwner(node, nameOwner); // Example resolver address
-        ens.setResolver(node, resolver); // Example resolver address
 
         vm.stopPrank();
     }
@@ -47,7 +55,9 @@ contract URegistryTest is Test {
     function test3000________________________________________________________________________________() public {}
 
     function test_001____getResolver_________________ReturnsCorrectResolver() public {
-        vm.prank(nameOwner);
+        vm.startPrank(nameOwner);
+        vm.roll(blocknumber); 
+        ens.setResolver(node, resolver);
         registry.registerResolver(node);
         (address resolver, uint256 blockNumber) = registry.getResolver(node, block.number);
         assertEq(resolver, ens.resolver(node));
@@ -55,13 +65,16 @@ contract URegistryTest is Test {
     }
 
     function test_002____getResolverNoRecord_________RevertsWhenNoRecord() public {
-        vm.prank(nameOwner);
-        vm.expectRevert(abi.encodeWithSelector(NoResolverBeforeBlock.selector, block.number));
+        vm.startPrank(nameOwner);
+        vm.roll(blocknumber); 
+        vm.expectRevert(abi.encodeWithSelector(NoResolverAtOrBeforeBlock.selector, block.number));
         registry.getResolver(node, block.number);
     }
 
     function test_003____latestResolver______________ReturnsLatestResolver() public {
-        vm.prank(nameOwner);
+        vm.startPrank(nameOwner);
+        vm.roll(blocknumber); 
+        ens.setResolver(node, resolver);
         registry.registerResolver(node);
         (address resolver, uint256 blockNumber) = registry.latestResolver(node);
         assertEq(resolver, ens.resolver(node));
@@ -69,7 +82,9 @@ contract URegistryTest is Test {
     }
 
     function test_004____registerResolver____________RegistersResolverCorrectly() public {
-        vm.prank(nameOwner);
+        vm.startPrank(nameOwner);
+        vm.roll(blocknumber); 
+        ens.setResolver(node, resolver);
         registry.registerResolver(node);
         (address resolver, uint256 blockNumber) = registry.latestResolver(node);
         assertEq(resolver, ens.resolver(node));
@@ -77,20 +92,51 @@ contract URegistryTest is Test {
     }
 
     function test_005____registerResolverUnauthorized_RevertsWhenUnauthorized() public {
-        vm.prank(unauthorized);
+        vm.startPrank(unauthorized);
+        vm.roll(blocknumber); 
         vm.expectRevert(abi.encodeWithSelector(NotOwnerOrApprovedController.selector));
         registry.registerResolver(node);
     }
 
     function test_006____setAuditId__________________SetsAuditIdCorrectly() public {
-        vm.prank(auditor);
+        vm.startPrank(auditor);
+        vm.roll(blocknumber); 
         registry.setAuditId(resolver, 1);
         assertEq(registry.getAuditId(resolver), 1);
     }
 
     function test_007____setAuditIdUnauthorized______RevertsWhenUnauthorized() public {
         vm.expectRevert(abi.encodeWithSelector(NotAnAuditor.selector));
-        vm.prank(unauthorized);
+        vm.startPrank(unauthorized);
+        vm.roll(blocknumber); 
         registry.setAuditId(address(ens), 1);
+    }
+
+    function test_008____registerMultipleResolvers___RegistersAndRetrievesCorrectly() public {
+        vm.startPrank(nameOwner);
+        ens.setResolver(node, resolver);
+        registry.registerResolver(node);
+
+        // Advance block number and register second resolver
+        vm.roll(blocknumber2);
+        ens.setResolver(node, resolver2);
+        registry.registerResolver(node);
+
+        // Advance block number and register third resolver
+        vm.roll(blocknumber3);
+        ens.setResolver(node, resolver3);
+        registry.registerResolver(node);
+
+        // Check resolver at block time after the third registration
+        (address resolvedAddress, ) = registry.getResolver(node, blocknumber3 + 1);
+        assertEq(resolvedAddress, resolver3);
+
+        // Check resolver between the second and third block time
+        (resolvedAddress, ) = registry.getResolver(node, blocknumber2 + 50);
+        assertEq(resolvedAddress, resolver2);
+
+        // Check resolver exactly at the first block time
+        (resolvedAddress, ) = registry.getResolver(node, blocknumber);
+        assertEq(resolvedAddress, resolver);
     }
 }
