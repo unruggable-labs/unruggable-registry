@@ -3,8 +3,6 @@ pragma solidity ^0.8.23;
 
 import "@openzeppelin/access/Ownable.sol";
 import "./ENS.sol";
-// console log
-import "forge-std/console.sol";
 
 // Custom errors
 error NoResolverAtOrBeforeBlock(uint256 blockNumber);
