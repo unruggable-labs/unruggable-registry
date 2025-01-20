@@ -2,22 +2,25 @@
 pragma solidity ^0.8.0;
 
 import { Test } from "forge-std/Test.sol";
-import { URegistry } from "../src/URegistry.sol";
+import { UResolverRegistryUpdatable } from "../src/UResolverRegistryUpdatable.sol";
 import { ENS } from "../src/ENS.sol";
 import { MockENSRegistry } from "../src/MockENSRegistry.sol";
 import { BytesUtils } from "../src/BytesUtils.sol";
 // import custom errors
-import { NoResolverAtOrBeforeBlock, NotOwnerOrApprovedController, NotAnAuditor } from "../src/URegistry.sol";
+import { NoResolverAtOrBeforeBlock, NotOwnerOrApprovedController } from "../src/UResolverRegistry.sol";
 
-contract URegistryTest is Test {
+// Ownable error
+error OwnableUnauthorizedAccount(address account);
+
+contract UResolverRegistryUpdatableTest is Test {
     using BytesUtils for bytes;
 
-    URegistry private registry;
+    UResolverRegistryUpdatable private registry;
     MockENSRegistry ens;
     address private ensOwner = address(0x1);
     address private nameOwner = address(0x2);
-    address private auditor = address(0x3);
     address private unauthorized = address(0x4);
+    address private uResolverRegistryOwner = address(0x8);
 
     // Resolver addresses
     address private resolver = address(0x5);
@@ -39,19 +42,21 @@ contract URegistryTest is Test {
 
         vm.startPrank(ensOwner);
         vm.roll(blocknumber); 
-        
+
+        // create the mock ens registry
         ens = new MockENSRegistry(ensOwner);
-        registry = new URegistry(address(ens));
-        registry.grantRole(registry.AUDITOR_ROLE(), auditor);
 
         // Set initial resolver for the node in the mock registry
         ens.setOwner(node, nameOwner); // Example resolver address
+        vm.stopPrank();
 
+        vm.startPrank(uResolverRegistryOwner);
+        registry = new UResolverRegistryUpdatable(address(ens));        
         vm.stopPrank();
     }
 
     function test1000________________________________________________________________________________() public {}
-    function test2000__________________________UREGISTRY_FUNCTIONS____________________________________() public {}
+    function test2000_________________________URESOLVER_REGISTRY_UPDATABLE___________________________() public {}
     function test3000________________________________________________________________________________() public {}
 
     function test_001____getResolver_________________ReturnsCorrectResolver() public {
@@ -76,9 +81,10 @@ contract URegistryTest is Test {
         vm.roll(blocknumber); 
         ens.setResolver(node, resolver);
         registry.registerResolver(node);
-        (address resolver, uint256 blockNumber) = registry.latestResolver(node);
+        (address resolver, uint256 blockNumber, uint256 index) = registry.latestResolver(node);
         assertEq(resolver, ens.resolver(node));
         assertEq(blockNumber, block.number);
+        assertEq(index, 0);
     }
 
     function test_004____registerResolver____________RegistersResolverCorrectly() public {
@@ -86,9 +92,10 @@ contract URegistryTest is Test {
         vm.roll(blocknumber); 
         ens.setResolver(node, resolver);
         registry.registerResolver(node);
-        (address resolver, uint256 blockNumber) = registry.latestResolver(node);
+        (address resolver, uint256 blockNumber, uint256 index) = registry.latestResolver(node);
         assertEq(resolver, ens.resolver(node));
         assertEq(blockNumber, block.number);
+        assertEq(index, 0);
     }
 
     function test_005____registerResolverUnauthorized_RevertsWhenUnauthorized() public {
@@ -96,20 +103,6 @@ contract URegistryTest is Test {
         vm.roll(blocknumber); 
         vm.expectRevert(abi.encodeWithSelector(NotOwnerOrApprovedController.selector));
         registry.registerResolver(node);
-    }
-
-    function test_006____setAuditId__________________SetsAuditIdCorrectly() public {
-        vm.startPrank(auditor);
-        vm.roll(blocknumber); 
-        registry.setAuditId(resolver, 1);
-        assertEq(registry.getAuditId(resolver), 1);
-    }
-
-    function test_007____setAuditIdUnauthorized______RevertsWhenUnauthorized() public {
-        vm.expectRevert(abi.encodeWithSelector(NotAnAuditor.selector));
-        vm.startPrank(unauthorized);
-        vm.roll(blocknumber); 
-        registry.setAuditId(address(ens), 1);
     }
 
     function test_008____registerMultipleResolvers___RegistersAndRetrievesCorrectly() public {
@@ -139,4 +132,39 @@ contract URegistryTest is Test {
         (resolvedAddress, ) = registry.getResolver(node, blocknumber);
         assertEq(resolvedAddress, resolver);
     }
-}
+
+    function test_009____updateResolver______________UpdatesResolverCorrectly() public {
+        vm.startPrank(nameOwner);
+        ens.setResolver(node, resolver);
+        registry.registerResolver(node);
+        vm.stopPrank();
+
+        // Update resolver as owner
+        vm.startPrank(uResolverRegistryOwner);
+        registry.updateResolver(node, 0, resolver2);
+        vm.stopPrank();
+
+        // Verify the resolver has been updated
+        (address updatedResolver, , ) = registry.latestResolver(node);
+        assertEq(updatedResolver, resolver2);
+    }
+
+    function test_010____updateResolverUnauthorized_RevertsWhenUnauthorized() public {
+        vm.startPrank(nameOwner);
+        ens.setResolver(node, resolver);
+        registry.registerResolver(node);
+        vm.stopPrank();
+
+        // Attempt to update resolver as unauthorized user
+        vm.startPrank(unauthorized);
+        vm.expectRevert(abi.encodeWithSelector(OwnableUnauthorizedAccount.selector, unauthorized));
+        registry.updateResolver(node, 0, resolver3);
+        vm.stopPrank();
+
+        // Attempt to update resolver as name owner
+        vm.startPrank(nameOwner);
+        vm.expectRevert(abi.encodeWithSelector(OwnableUnauthorizedAccount.selector, nameOwner));
+        registry.updateResolver(node, 0, resolver3);
+        vm.stopPrank();
+    }
+} 

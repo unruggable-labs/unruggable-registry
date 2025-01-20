@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.23;
 
-import "@openzeppelin/access/AccessControl.sol";
+import "@openzeppelin/access/Ownable.sol";
 import "./ENS.sol";
 // console log
 import "forge-std/console.sol";
@@ -9,31 +9,23 @@ import "forge-std/console.sol";
 // Custom errors
 error NoResolverAtOrBeforeBlock(uint256 blockNumber);
 error NotOwnerOrApprovedController();
-error NotAnAuditor();
 
-contract URegistry is AccessControl {
+contract UResolverRegistry is Ownable {
     struct ResolverInfo {
         address resolver;
         uint256 blockNumber;
     }
 
-    bytes32 public constant AUDITOR_ROLE = keccak256("AUDITOR_ROLE");
-
-    mapping(bytes32 => ResolverInfo[]) private resolvers;
-
-    // New mapping for audit IDs
-    mapping(address => uint256) private resolverAudits;
+    mapping(bytes32 => ResolverInfo[]) internal resolvers;
 
     ENS public ensRegistry;
 
-    constructor(address _ensRegistry) {
+    constructor(address _ensRegistry) Ownable(msg.sender) {
         ensRegistry = ENS(_ensRegistry);
-        _grantRole(DEFAULT_ADMIN_ROLE, msg.sender);
-        _grantRole(AUDITOR_ROLE, msg.sender);
     }
     
     // Resolver at or before the block number
-    function getResolver(bytes32 node, uint256 blockNumber) external view returns (address, uint256) {
+    function getResolver(bytes32 node, uint256 blockNumber) external view returns (address /*resolver*/, uint256 /*blockNumber*/) {
 
         // Use a binary search to find the resolver at or before the block number
         ResolverInfo[] storage resolverList = resolvers[node];
@@ -57,11 +49,6 @@ contract URegistry is AccessControl {
         return (result.resolver, result.blockNumber);
     }
 
-    // Latest resolver
-    function latestResolver(bytes32 node) external view returns (address, uint256) {
-        return (resolvers[node][resolvers[node].length - 1].resolver, resolvers[node][resolvers[node].length - 1].blockNumber);
-    }
-
     function registerResolver(bytes32 node) external {
         address nodeOwner = ensRegistry.owner(node);
         if (!(msg.sender == nodeOwner || ensRegistry.isApprovedForAll(nodeOwner, msg.sender))) {
@@ -79,25 +66,21 @@ contract URegistry is AccessControl {
         resolvers[node].push(newInfo);
     }
 
-    function setAuditId(address resolver, uint256 auditId) external {
-        if (!hasRole(AUDITOR_ROLE, msg.sender)) {
-            revert NotAnAuditor();
-        }
-        resolverAudits[resolver] = auditId;
-    }
-
-    function getResolverInfo(bytes32 node, uint256 index) external view returns (address, uint256) {
+    function getResolverInfoByIndex(bytes32 node, uint256 index) external view returns (address /*resolver*/, uint256 /*blockNumber*/) {
         ResolverInfo storage info = resolvers[node][index];
         return (info.resolver, info.blockNumber);
     }
 
-    function getAuditId(address resolver) external view returns (uint256) {
-        return resolverAudits[resolver];
+    function latestResolver(bytes32 node) external view returns (address /*resolver*/, uint256 /*blockNumber*/, uint256 /*index*/) {
+
+        // get the length of the resolver list
+        uint256 length = resolvers[node].length;
+
+        // check if the length is greater than 0
+        require(length > 0, "No resolvers available for this node");
+
+        // return the resolver and block number of the latest resolver
+        return (resolvers[node][length - 1].resolver, resolvers[node][length - 1].blockNumber, length-1);
     }
 
-    function getResolverLatest(bytes32 node) external view returns (address, uint256) {
-        require(resolvers[node].length > 0, "No resolvers available for this node");
-        ResolverInfo storage latestResolver = resolverList[resolvers[node].length - 1];
-        return (latestResolver.resolver, latestResolver.blockNumber);
-    }
-}
+} 
