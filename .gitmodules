@@ -1,3 +1,6 @@
 [submodule "lib/forge-std"]
 	path = lib/forge-std
 	url = https://github.com/foundry-rs/forge-std
+[submodule "lib/unruggable-resolve"]
+	path = lib/unruggable-resolve
+	url = https://github.com/unruggable-labs/unruggable-resolve
