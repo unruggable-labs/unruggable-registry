@@ -4,3 +4,6 @@
 [submodule "lib/unruggable-resolve"]
 	path = lib/unruggable-resolve
 	url = https://github.com/unruggable-labs/unruggable-resolve
+[submodule "lib/CCIPReader.sol"]
+	path = lib/CCIPReader.sol
+	url = https://github.com/unruggable-labs/CCIPReader.sol
