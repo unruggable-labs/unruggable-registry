@@ -27,10 +27,10 @@ contract UResolverRegistryTest is Test {
     address private resolver2 = address(0x6);
     address private resolver3 = address(0x7);
 
-    // Block numbers for testing
-    uint256 private blocknumber = 1641070100;
-    uint256 private blocknumber2 = blocknumber + 100;
-    uint256 private blocknumber3 = blocknumber + 200;
+    // Block times for testing
+    uint64 private blockTime = 1641070100;
+    uint64 private blockTime2 = blockTime + 100;
+    uint64 private blockTime3 = blockTime + 200;
 
     // DNS-encoded name for "example.eth" using string literal format
     bytes private dnsEncodedName = "\x07example\x03eth\x00";
@@ -39,9 +39,8 @@ contract UResolverRegistryTest is Test {
     bytes32 private node = dnsEncodedName.namehash(0);
 
     function setUp() public {
-
         vm.startPrank(ensOwner);
-        vm.roll(blocknumber); 
+        vm.warp(blockTime); 
 
         // create the mock ens registry
         ens = new MockENSRegistry(ensOwner);
@@ -61,46 +60,44 @@ contract UResolverRegistryTest is Test {
 
     function test_001____getResolver_________________ReturnsCorrectResolver() public {
         vm.startPrank(nameOwner);
-        vm.roll(blocknumber); 
+        vm.warp(blockTime); 
         ens.setResolver(node, resolver);
         registry.registerResolver(node);
-        (address resolver, uint256 blockNumber) = registry.getResolver(node, block.number);
+        (address resolver, uint64 blockTime) = registry.getResolver(node, uint64(block.timestamp));
         assertEq(resolver, ens.resolver(node));
-        assertEq(blockNumber, block.number);
+        assertEq(blockTime, uint64(block.timestamp));
     }
 
     function test_002____getResolverNoRecord_________RevertsWhenNoRecord() public {
         vm.startPrank(nameOwner);
-        vm.roll(blocknumber); 
-        vm.expectRevert(abi.encodeWithSelector(NoResolverAtOrBeforeBlock.selector, block.number));
-        registry.getResolver(node, block.number);
+        vm.warp(blockTime); 
+        vm.expectRevert(abi.encodeWithSelector(NoResolverAtOrBeforeBlock.selector, uint64(block.timestamp)));
+        registry.getResolver(node, uint64(block.timestamp));
     }
 
     function test_003____latestResolver______________ReturnsLatestResolver() public {
         vm.startPrank(nameOwner);
-        vm.roll(blocknumber); 
+        vm.warp(blockTime); 
         ens.setResolver(node, resolver);
         registry.registerResolver(node);
-        (address resolver, uint256 blockNumber, uint256 index) = registry.latestResolver(node);
+        (address resolver, uint64 blockTime) = registry.latestResolver(node);
         assertEq(resolver, ens.resolver(node));
-        assertEq(blockNumber, block.number);
-        assertEq(index, 0);
+        assertEq(blockTime, uint64(block.timestamp));
     }
 
     function test_004____registerResolver____________RegistersResolverCorrectly() public {
         vm.startPrank(nameOwner);
-        vm.roll(blocknumber); 
+        vm.warp(blockTime); 
         ens.setResolver(node, resolver);
         registry.registerResolver(node);
-        (address resolver, uint256 blockNumber, uint256 index) = registry.latestResolver(node);
+        (address resolver, uint64 blockTime) = registry.latestResolver(node);
         assertEq(resolver, ens.resolver(node));
-        assertEq(blockNumber, block.number);
-        assertEq(index, 0);
+        assertEq(blockTime, uint64(block.timestamp));
     }
 
     function test_005____registerResolverUnauthorized_RevertsWhenUnauthorized() public {
         vm.startPrank(unauthorized);
-        vm.roll(blocknumber); 
+        vm.warp(blockTime); 
         vm.expectRevert(abi.encodeWithSelector(NotOwnerOrApprovedController.selector));
         registry.registerResolver(node);
     }
@@ -110,27 +107,26 @@ contract UResolverRegistryTest is Test {
         ens.setResolver(node, resolver);
         registry.registerResolver(node);
 
-        // Advance block number and register second resolver
-        vm.roll(blocknumber2);
+        // Advance block time and register second resolver
+        vm.warp(blockTime2);
         ens.setResolver(node, resolver2);
         registry.registerResolver(node);
 
-        // Advance block number and register third resolver
-        vm.roll(blocknumber3);
+        // Advance block time and register third resolver
+        vm.warp(blockTime3);
         ens.setResolver(node, resolver3);
         registry.registerResolver(node);
 
         // Check resolver at block time after the third registration
-        (address resolvedAddress, ) = registry.getResolver(node, blocknumber3 + 1);
+        (address resolvedAddress, ) = registry.getResolver(node, blockTime3 + 1);
         assertEq(resolvedAddress, resolver3);
 
         // Check resolver between the second and third block time
-        (resolvedAddress, ) = registry.getResolver(node, blocknumber2 + 50);
+        (resolvedAddress, ) = registry.getResolver(node, blockTime2 + 50);
         assertEq(resolvedAddress, resolver2);
 
         // Check resolver exactly at the first block time
-        (resolvedAddress, ) = registry.getResolver(node, blocknumber);
+        (resolvedAddress, ) = registry.getResolver(node, blockTime);
         assertEq(resolvedAddress, resolver);
     }
-
 } 
