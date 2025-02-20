@@ -1,2 +1,5 @@
 @openzeppelin/=node_modules/@openzeppelin/contracts/
 forge-std/=lib/forge-std/src/ 
+@unruggable/CCIPReader.sol/=lib/CCIPReader.sol
+@unruggable-resolve/=lib/unruggable-resolve/
+@ensdomains/=lib/

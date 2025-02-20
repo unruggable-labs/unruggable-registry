@@ -2,14 +2,10 @@
 pragma solidity ^0.8.23;
 
 import "@openzeppelin/access/AccessControl.sol";
-import "./ENS.sol";
+import "@ensdomains/ens-contracts/contracts/registry/ENS.sol";
+import "./IUResolverRegistry.sol";
 
-// Custom errors
-error NoResolverAtOrBeforeBlock(uint256 blockTime);
-error NotOwnerOrApprovedController();
-error NotAnAuditor();
-
-contract UResolverRegistry is AccessControl {
+contract UResolverRegistry is IUResolverRegistry, AccessControl {
     struct ResolverInfo {
         address resolver;
         uint64 blockTime;
