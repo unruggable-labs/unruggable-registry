@@ -5,21 +5,21 @@ import {Test} from "forge-std/Test.sol";
 import {UResolverRegistry, IUResolverRegistry, NoResolverAtOrBeforeBlock, NotOwnerOrApprovedController} from "../src/UResolverRegistry.sol";
 import {DNSCoder} from "@unruggable-resolve/contracts/DNSCoder.sol";
 import {UR, IUR} from "@unruggable-resolve/contracts/UR.sol";
-import {WrappedUR_30DaysOldResolver, ResolverTooNew} from "../src/wrappers/WrappedUR_30DaysOldResolver.sol";
+import {WrappedUR_AuditedAnd30Days, ResolverTooNew, ResolverNotAudited} from "../src/wrappers/WrappedUR_AuditedAnd30Days.sol";
 import {Lookup, Response} from "@unruggable-resolve/contracts/IUR.sol";
 import {SimpleResolver} from "../src/mocks/SimpleResolver.sol";
 import {ENS} from "@ensdomains/ens-contracts/contracts/registry/ENS.sol";
 import {IAddressResolver} from "@ensdomains/ens-contracts/contracts/resolvers/profiles/IAddressResolver.sol";
-
+import {UAuditRegistry} from "../src/UAuditRegistry.sol";
 import {BytesUtils} from "../src/utils/BytesUtils.sol";
 import {ENSRegistry} from "@ensdomains/ens-contracts/contracts/registry/ENSRegistry.sol";
 
-
-contract WrappedUR_30DaysOldResolverTest is Test {
+contract WrappedUR_AuditedAnd30DaysTest is Test {
     IUResolverRegistry public registry;
+    UAuditRegistry public auditRegistry;
     ENSRegistry public ensRegistry;
     IUR public ur;
-    WrappedUR_30DaysOldResolver public wrappedUR;
+    WrappedUR_AuditedAnd30Days public wrappedUR;
     SimpleResolver public simpleResolver;
 
     address public fakeResolver;
@@ -34,11 +34,10 @@ contract WrappedUR_30DaysOldResolverTest is Test {
     bytes32 ethNamehash;
 
     function setUp() public {
-
         // set addr1 as the msg.sender
         vm.startPrank(addr1);
 
-         // set the time to now
+        // set the time to now
         vm.warp(1000000);
 
         // deploy a ENS registry
@@ -49,6 +48,9 @@ contract WrappedUR_30DaysOldResolverTest is Test {
 
         // deploy a UResolverRegistry
         registry = new UResolverRegistry(address(ensRegistry));
+
+        // deploy the audit registry
+        auditRegistry = new UAuditRegistry(addr1);
 
         // register the .eth subdomain
         ensRegistry.setSubnodeOwner(bytes32(0), keccak256(bytes("eth")), addr1);
@@ -67,7 +69,7 @@ contract WrappedUR_30DaysOldResolverTest is Test {
         assertEq(owner, addr1, "name.eth should be owned by addr1");
 
         // deploy a wrapped UR
-        wrappedUR = new WrappedUR_30DaysOldResolver(ur, registry);
+        wrappedUR = new WrappedUR_AuditedAnd30Days(ur, registry, auditRegistry);
 
         // deploy a simple resolver
         simpleResolver = new SimpleResolver(ENS(address(ensRegistry)), addr1);
@@ -78,19 +80,24 @@ contract WrappedUR_30DaysOldResolverTest is Test {
         // set the address for Ethereum Mainnet
         simpleResolver.setAddr(nameEthNamehash, 60, abi.encodePacked(addr1));
 
+        vm.stopPrank();
     }
 
     function test1000________________________________________________________________________________() public {}
-    function test2000______________________WRAPPED_UR_30_DAYS_OLD_RESOLVER___________________________() public {}
+    function test2000______________________WRAPPED_UR_AUDITED_AND_30_DAYS____________________________() public {}
     function test3000________________________________________________________________________________() public {}
 
     function test_001____Resolve______________________ResolveAnAddress() public {
+        vm.startPrank(addr1);
 
         // add resolver to registry
         registry.registerResolver(nameEthNamehash);
 
+        // set audit ID for the resolver
+        auditRegistry.setAuditId(address(simpleResolver), 1);
+
         // move forward by 30 days + 1 second
-        vm.warp(block.timestamp + 30 days);
+        vm.warp(block.timestamp + 30 days + 1);
 
         // encode a addr call with coinType 60
         bytes memory addrCall = abi.encodeCall(IAddressResolver.addr, (nameEthNamehash, 60));
@@ -106,15 +113,44 @@ contract WrappedUR_30DaysOldResolverTest is Test {
 
         // make sure the resolved address is addr1
         assertEq(res[0].data, abi.encodePacked(addr1), "Resolved address should be addr1");
+        vm.stopPrank();
     }
 
-    function test_001____Resolve______________________CannotResolveAnAddressOfARecentlyRegisteredResolver() public {
+    function test_002____Resolve______________________CannotResolveAnAddressOfUnauditedResolver() public {
+        vm.startPrank(addr1);
 
         // add resolver to registry
         registry.registerResolver(nameEthNamehash);
 
-        // move forward by 29 days + 1 second
-        vm.warp(block.timestamp + 29 days );
+        // move forward by 30 days + 1 second
+        vm.warp(block.timestamp + 30 days + 1);
+
+        // encode a addr call with coinType 60
+        bytes memory addrCall = abi.encodeCall(IAddressResolver.addr, (nameEthNamehash, 60));
+
+        // create a length 1 array of the addr call
+        bytes[] memory calls = new bytes[](1);
+
+        // set the first element of the calls array to the addr call
+        calls[0] = addrCall;
+
+        // expect the resolve to revert because resolver has no audit ID
+        vm.expectRevert(ResolverNotAudited.selector);
+        wrappedUR.resolve("\x04name\x03eth\x00", calls, new string[](0));
+        vm.stopPrank();
+    }
+
+    function test_003____Resolve______________________CannotResolveAnAddressOfARecentlyRegisteredResolver() public {
+        vm.startPrank(addr1);
+
+        // add resolver to registry
+        registry.registerResolver(nameEthNamehash);
+
+        // set audit ID for the resolver
+        auditRegistry.setAuditId(address(simpleResolver), 1);
+
+        // move forward by less than 29 days
+        vm.warp(block.timestamp + 29 days);
 
         // encode a addr call with coinType 60
         bytes memory addrCall = abi.encodeCall(IAddressResolver.addr, (nameEthNamehash, 60));
@@ -126,9 +162,35 @@ contract WrappedUR_30DaysOldResolverTest is Test {
         calls[0] = addrCall;
 
         // expect the resolve to revert
-        vm.expectRevert(abi.encodeWithSelector(ResolverTooNew.selector));
-        // resolve name.eth using wrappedUR
-        (Lookup memory lookup, Response[] memory res) = wrappedUR.resolve("\x04name\x03eth\x00", calls, new string[](0));
-
+        vm.expectRevert(ResolverTooNew.selector);
+        wrappedUR.resolve("\x04name\x03eth\x00", calls, new string[](0));
+        vm.stopPrank();
     }
-}
+
+    function test_004____Resolve______________________CannotResolveWithZeroAuditId() public {
+        vm.startPrank(addr1);
+
+        // add resolver to registry
+        registry.registerResolver(nameEthNamehash);
+
+        // set audit ID for the resolver to 0
+        auditRegistry.setAuditId(address(simpleResolver), 0);
+
+        // move forward by 30 days + 1 second
+        vm.warp(block.timestamp + 30 days + 1);
+
+        // encode a addr call with coinType 60
+        bytes memory addrCall = abi.encodeCall(IAddressResolver.addr, (nameEthNamehash, 60));
+
+        // create a length 1 array of the addr call
+        bytes[] memory calls = new bytes[](1);
+
+        // set the first element of the calls array to the addr call
+        calls[0] = addrCall;
+
+        // expect the resolve to revert because audit ID is 0
+        vm.expectRevert(ResolverNotAudited.selector);
+        wrappedUR.resolve("\x04name\x03eth\x00", calls, new string[](0));
+        vm.stopPrank();
+    }
+} 
