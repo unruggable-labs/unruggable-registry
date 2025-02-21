@@ -1,7 +1,9 @@
 
 # Unruggable Registry: Securely Resolving ENS Names
 
-Currently, the most up-to-date method to resolve ENS names onchain, without a trusted intermediary, is to use a Universal Resolver—a smart contract that handles all the complexity of resolving an ENS name onchain. However, to provide secure ENS name resolution, we use a Universal Resolver wrapper that allows us to add additional conditions, such as only allowing ENS names to be resolved if they have a resolver that is at least 30 days old or a resolver that is immutable and has been audited.
+Currently, the most up-to-date method to resolve ENS names onchain, without a trusted intermediary, is to use a Universal Resolver. This is a smart contract that handles all the complexity of resolving an ENS name onchain. However, resolving an ENS name securely onchain and resolving a secure ENS name are not the same thing. All ENS names are resolved using the resolver of the ENS name. An ENS name is only as secure as the resolver smart contract of the name. Many names also use CCIP-Read (ERC-3668) offchain resolution, including many that are simply resolved using a fully trusted gateway server. Because an ENS name is only as secure as its resolver, to have fully secure onchain resolution of ENS names, both the resolution method and the resolvers need to be secure.
+
+Because every ENS name has its own security properties, which could range from totally trusted to totally trustless, clients need a way to resolve only the ENS names that fit their security requirements. To provide this capability for onchain ENS name resolution, we use a Universal Resolver wrapper that allows us to add additional conditions, such as only allowing ENS names to be resolved if they have a resolver that is at least 30 days old or a resolver that is immutable and has been audited.
 
 By choosing a custom-configured Universal Resolver wrapper contract, clients can choose which constraints they want when resolving ENS names.
 
