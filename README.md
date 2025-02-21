@@ -1,4 +1,3 @@
-
 # Unruggable Registry: Securely Resolving ENS Names
 
 Currently, the most up-to-date method to resolve ENS names onchain, without a trusted intermediary, is to use a Universal Resolver. This is a smart contract that handles all the complexity of resolving an ENS name onchain. However, resolving an ENS name securely onchain and resolving a secure ENS name are not the same thing. All ENS names are resolved using the resolver of the ENS name. An ENS name is only as secure as the resolver smart contract of the name. Many names also use CCIP-Read (ERC-3668) offchain resolution, including many that are simply resolved using a fully trusted gateway server. Because an ENS name is only as secure as its resolver, to have fully secure onchain resolution of ENS names, both the resolution method and the resolvers need to be secure.
@@ -15,9 +14,22 @@ Wrappers serve as entry point contracts for resolving ENS names. They are deploy
 
 This wrapper is configured to only resolve ENS names with resolvers that are registered onchain and where the resolver is older than 30 days. This wrapper entry point is useful for preventing ENS name owners from suddenly switching out a resolver to spoof records.
 
+### WrappedUR_AuditedResolver.sol
+
+This wrapper only resolves ENS names that use audited resolvers. It checks against an audit registry to verify that the resolver has a valid audit ID. This provides an additional layer of security by ensuring that only ENS names with professionally audited resolver contracts can be resolved.
+
+### WrappedUR_AuditedAnd30Days.sol
+
+This wrapper combines both security features - it only resolves ENS names that use audited resolvers AND have been registered for at least 30 days. This provides the highest level of security by ensuring:
+1. The resolver has been professionally audited
+2. The resolver has been stable for at least 30 days
+3. The resolver is properly registered in the resolver registry
+
+This wrapper is ideal for applications requiring maximum security in ENS name resolution.
+
 ## How Universal Resolver Wrappers Work
 
-The Universal Resolver Wrapper `WrapperUR_30DaysOldResolver.sol` uses a special registry of resolvers that allows any name owner to register their resolver onchain.
+A Universal Resolver wrapper, such as `WrapperUR_30DaysOldResolver.sol`, uses a special registry of resolvers that allows any name owner to register their resolver onchain.
 
 1. **Resolver Registry**: 
    - A registry of resolver addresses registered by name owners
