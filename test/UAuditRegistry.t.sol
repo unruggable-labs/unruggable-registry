@@ -3,10 +3,7 @@ pragma solidity ^0.8.0;
 
 import { Test } from "forge-std/Test.sol";
 import { UAuditRegistry } from "../src/UAuditRegistry.sol";
-import { Ownable } from "@openzeppelin/access/Ownable.sol";
-
-// Ownable error
-error OwnableUnauthorizedAccount(address account);
+import { IAccessControl } from "@openzeppelin/contracts/access/IAccessControl.sol";
 
 contract UAuditRegistryTest is Test {
     UAuditRegistry private auditRegistry;
@@ -38,7 +35,7 @@ contract UAuditRegistryTest is Test {
 
     function test_002____setAuditIdUnauthorized______RevertsWhenUnauthorized() public {
         vm.startPrank(unauthorized);
-        vm.expectRevert(abi.encodeWithSelector(OwnableUnauthorizedAccount.selector, unauthorized));
+        vm.expectRevert(abi.encodeWithSelector(IAccessControl.AccessControlUnauthorizedAccount.selector, unauthorized, auditRegistry.CONTROLLER_ROLE()));
         auditRegistry.setAuditId(resolver, 1);
         vm.stopPrank();
     }
@@ -51,5 +48,13 @@ contract UAuditRegistryTest is Test {
 
         assertEq(auditRegistry.getAuditId(resolver), 1);
         assertEq(auditRegistry.getAuditId(resolver2), 2);
+    }
+
+    function test_004____hasRole_____________________OwnerHasControllerRole() public {
+        assertTrue(auditRegistry.hasRole(auditRegistry.CONTROLLER_ROLE(), owner));
+    }
+
+    function test_005____hasRole_____________________OwnerHasDefaultAdminRole() public {
+        assertTrue(auditRegistry.hasRole(auditRegistry.DEFAULT_ADMIN_ROLE(), owner));
     }
 } 
