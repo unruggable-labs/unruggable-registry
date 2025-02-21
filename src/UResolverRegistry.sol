@@ -66,7 +66,7 @@ contract UResolverRegistry is IUResolverRegistry, AccessControl {
         ResolverInfo[] storage resolverList = resolvers[node];
         require(resolverList.length > 0, "No resolvers available for this node");
 
-        ResolverInfo storage latestResolver = resolverList[resolverList.length - 1];
-        return (latestResolver.resolver, latestResolver.blockTime);
+        ResolverInfo storage lResolver = resolverList[resolverList.length - 1];
+        return (lResolver.resolver, lResolver.blockTime);
     }
 } 

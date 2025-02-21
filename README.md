@@ -31,23 +31,23 @@ This wrapper is ideal for applications requiring maximum security in ENS name re
 
 A Universal Resolver wrapper, such as `WrapperUR_30DaysOldResolver.sol`, uses a special registry of resolvers that allows any name owner to register their resolver onchain.
 
-1. **Resolver Registry**: 
-   - A registry of resolver addresses registered by name owners
+**Resolver Registry**: 
+   - A onchain registry of resolver addresses registered by ENS name owners
    - Each record includes the resolver address and timestamp
 
-2. **Resolution Safety Checks**:
+**Resolution Safety Checks**:
    - Before resolving any ENS records, `WrapperUR_30DaysOldResolver` performs two critical checks:
      1. Verifies that the current resolver of the ENS name matches the one registered in `UResolverRegistry`
      2. Ensures the resolver has been in place for at least 30 days
 
 ### Security Benefits
 
-- **Change Detection**: Immediately detects if a resolver has been changed.
-- **Cooling Period**: The 30-day waiting period provides users time to:
+**Change Detection**: Immediately detects if a resolver has been changed.
+**Cooling Period**: The 30-day waiting period provides users time to:
   - Become aware of resolver changes
   - Review new resolver contracts
   - Take action if necessary
-- **Attack Prevention**: Protects against sudden resolver switches that could be used to:
+**Attack Prevention**: Protects against sudden resolver switches that could be used to:
   - Spoof ENS records (This is particularly important for onchain records like token balances)
 
 ## Foundry Project
