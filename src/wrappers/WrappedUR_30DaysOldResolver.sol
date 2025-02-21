@@ -5,12 +5,13 @@ pragma solidity ^0.8.27;
 
 import {CCIPReader} from "@unruggable/CCIPReader.sol/contracts/CCIPReader.sol";
 import {IUR, Lookup, Response} from "@unruggable-resolve/contracts/IUR.sol";
-import {IUResolverRegistry} from "./IUResolverRegistry.sol";
+import {IUResolverRegistry} from "../IUResolverRegistry.sol";
 import {console} from "forge-std/console.sol";
+
 error ResolverNotRegistered();
 error ResolverTooNew();
 
-contract WrappedUR is CCIPReader {
+contract WrappedUR_30DaysOldResolver is CCIPReader {
     IUR public immutable ur;
     IUResolverRegistry public immutable registry;
 

@@ -5,13 +5,13 @@ import {Test} from "forge-std/Test.sol";
 import {UResolverRegistry, IUResolverRegistry, NoResolverAtOrBeforeBlock, NotOwnerOrApprovedController} from "../src/UResolverRegistry.sol";
 import {DNSCoder} from "@unruggable-resolve/contracts/DNSCoder.sol";
 import {UR, IUR} from "@unruggable-resolve/contracts/UR.sol";
-import {WrappedUR, ResolverTooNew} from "../src/WrappedUR.sol";
+import {WrappedUR_30DaysOldResolver, ResolverTooNew} from "../src/wrappers/WrappedUR_30DaysOldResolver.sol";
 import {Lookup, Response} from "@unruggable-resolve/contracts/IUR.sol";
-import {SimpleResolver} from "../src/SimpleResolver.sol";
+import {SimpleResolver} from "../src/mocks/SimpleResolver.sol";
 import {ENS} from "@ensdomains/ens-contracts/contracts/registry/ENS.sol";
 import {IAddressResolver} from "@ensdomains/ens-contracts/contracts/resolvers/profiles/IAddressResolver.sol";
 
-import {BytesUtils} from "../src/BytesUtils.sol";
+import {BytesUtils} from "../src/utils/BytesUtils.sol";
 import {ENSRegistry} from "@ensdomains/ens-contracts/contracts/registry/ENSRegistry.sol";
 
 
@@ -19,7 +19,7 @@ contract WrappedURTest is Test {
     IUResolverRegistry public registry;
     ENSRegistry public ensRegistry;
     IUR public ur;
-    WrappedUR public wrappedUR;
+    WrappedUR_30DaysOldResolver public wrappedUR;
     SimpleResolver public simpleResolver;
 
     address public fakeResolver;
@@ -67,7 +67,7 @@ contract WrappedURTest is Test {
         assertEq(owner, addr1, "name.eth should be owned by addr1");
 
         // deploy a wrapped UR
-        wrappedUR = new WrappedUR(ur, registry);
+        wrappedUR = new WrappedUR_30DaysOldResolver(ur, registry);
 
         // deploy a simple resolver
         simpleResolver = new SimpleResolver(ENS(address(ensRegistry)), addr1);

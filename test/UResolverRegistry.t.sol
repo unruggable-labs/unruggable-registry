@@ -4,7 +4,7 @@ pragma solidity ^0.8.27;
 import {Test} from "forge-std/Test.sol";
 import {UResolverRegistry, NoResolverAtOrBeforeBlock, NotOwnerOrApprovedController} from "../src/UResolverRegistry.sol";
 import {DNSCoder} from "@unruggable-resolve/contracts/DNSCoder.sol";
-import {BytesUtils} from "../src/BytesUtils.sol";
+import {BytesUtils} from "../src/utils/BytesUtils.sol";
 import {ENSRegistry} from "@ensdomains/ens-contracts/contracts/registry/ENSRegistry.sol";
 
 contract UResolverRegistryTest is Test {
