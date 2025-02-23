@@ -58,7 +58,11 @@ contract UResolverRegistry is IUResolverRegistry, AccessControl {
     }
 
     function getResolverInfoByIndex(bytes32 node, uint256 index) external view returns (address /*resolver*/, uint64 /*blockTime*/) {
-        ResolverInfo storage info = resolvers[node][index];
+        ResolverInfo[] storage resolverList = resolvers[node];
+        if (index >= resolverList.length) {
+            revert InvalidResolverIndex(index, resolverList.length);
+        }
+        ResolverInfo storage info = resolverList[index];
         return (info.resolver, info.blockTime);
     }
 

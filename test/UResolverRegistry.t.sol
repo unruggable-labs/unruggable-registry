@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.27;
+pragma solidity ^0.8.23;
 
 import {Test} from "forge-std/Test.sol";
-import {UResolverRegistry, NoResolverAtOrBeforeBlock, NotOwnerOrApprovedController} from "../src/UResolverRegistry.sol";
+import {UResolverRegistry, NoResolverAtOrBeforeBlock, NotOwnerOrApprovedController, InvalidResolverIndex} from "../src/UResolverRegistry.sol";
 import {DNSCoder} from "@unruggable-resolve/contracts/DNSCoder.sol";
 import {BytesUtils} from "../src/utils/BytesUtils.sol";
 import {ENSRegistry} from "@ensdomains/ens-contracts/contracts/registry/ENSRegistry.sol";
@@ -203,5 +203,171 @@ contract UResolverRegistryTest is Test {
 
     }
     
+    function test_006____latestResolver_______________RevertsWhenEmpty() public {
+        vm.expectRevert("No resolvers available for this node");
+        registry.latestResolver(nameEthNamehash);
+    }
+
+    function test_007____getResolverInfoByIndex_______RevertsOnInvalidIndex() public {
+        // Register one resolver
+        ensRegistry.setResolver(nameEthNamehash, resolver);
+        registry.registerResolver(nameEthNamehash);
+        
+        // Try to access index 1 when only 0 exists
+        vm.expectRevert(abi.encodeWithSelector(InvalidResolverIndex.selector, 1, 1));
+        registry.getResolverInfoByIndex(nameEthNamehash, 1);
+    }
+
+    function test_008____registerResolver_____________HandlesZeroAddress() public {
+        // Set resolver to zero address
+        ensRegistry.setResolver(nameEthNamehash, address(0));
+        
+        // Should still register the zero address
+        registry.registerResolver(nameEthNamehash);
+        
+        (address resolverAddr,) = registry.latestResolver(nameEthNamehash);
+        assertEq(resolverAddr, address(0), "Should register zero address resolver");
+    }
+
+    function test_009____registerResolver_____________HandlesOwnershipChange() public {
+        // Initial setup
+        ensRegistry.setResolver(nameEthNamehash, resolver);
+        registry.registerResolver(nameEthNamehash);
+        
+        // Transfer ownership to addr2
+        ensRegistry.setOwner(nameEthNamehash, addr2);
+        
+        // Original owner should no longer be able to register
+        vm.expectRevert(abi.encodeWithSelector(NotOwnerOrApprovedController.selector));
+        registry.registerResolver(nameEthNamehash);
+        
+        // New owner should be able to register
+        vm.stopPrank();
+        vm.startPrank(addr2);
+        ensRegistry.setResolver(nameEthNamehash, resolver2);
+        registry.registerResolver(nameEthNamehash);
+    }
+
+    function test_010____registerResolver_____________WorksWithApprovedOperator() public {
+        // Set up initial resolver
+        ensRegistry.setResolver(nameEthNamehash, resolver);
+        
+        // Approve addr2 as operator
+        ensRegistry.setApprovalForAll(addr2, true);
+        
+        // Switch to addr2 and verify they can register
+        vm.stopPrank();
+        vm.startPrank(addr2);
+        registry.registerResolver(nameEthNamehash);
+        
+        (address resolverAddr,) = registry.latestResolver(nameEthNamehash);
+        assertEq(resolverAddr, resolver, "Approved operator should be able to register resolver");
+    }
+
+    function test_011____getResolver__________________HandlesMultipleResolversInSameBlock() public {
+        // Register multiple resolvers in the same block
+        ensRegistry.setResolver(nameEthNamehash, resolver);
+        registry.registerResolver(nameEthNamehash);
+        
+        ensRegistry.setResolver(nameEthNamehash, resolver2);
+        registry.registerResolver(nameEthNamehash);
+        
+        // Should return the latest resolver for that block
+        (address resolverAddr,) = registry.getResolver(nameEthNamehash, uint64(block.timestamp));
+        assertEq(resolverAddr, resolver2, "Should return latest resolver in block");
+    }
+
+    function test_012____getResolver__________________HandlesExactBlockTimeMatch() public {
+        uint64 timestamp1 = uint64(block.timestamp);
+        ensRegistry.setResolver(nameEthNamehash, resolver);
+        registry.registerResolver(nameEthNamehash);
+        
+        vm.warp(block.timestamp + 100);
+        uint64 timestamp2 = uint64(block.timestamp);
+        ensRegistry.setResolver(nameEthNamehash, resolver2);
+        registry.registerResolver(nameEthNamehash);
+        
+        // Test exact timestamp matches
+        (address resolverAddr1,) = registry.getResolver(nameEthNamehash, timestamp1);
+        assertEq(resolverAddr1, resolver, "Should match exact first timestamp");
+        
+        (address resolverAddr2,) = registry.getResolver(nameEthNamehash, timestamp2);
+        assertEq(resolverAddr2, resolver2, "Should match exact second timestamp");
+    }
+
+    function test_013____registerResolver_____________HandlesConsecutiveUpdates() public {
+        // Register same resolver multiple times
+        ensRegistry.setResolver(nameEthNamehash, resolver);
+        registry.registerResolver(nameEthNamehash);
+        registry.registerResolver(nameEthNamehash);
+        
+        // Verify history length and values
+        (address resolver1,) = registry.getResolverInfoByIndex(nameEthNamehash, 0);
+        (address resolver2,) = registry.getResolverInfoByIndex(nameEthNamehash, 1);
+        
+        assertEq(resolver1, resolver, "First registration should be recorded");
+        assertEq(resolver2, resolver, "Second registration should be recorded");
+    }
+
+    function test_014____getResolver__________________HandlesBinarySearchEdgeCases() public {
+        // Setup multiple resolvers at different times
+        ensRegistry.setResolver(nameEthNamehash, resolver);
+        registry.registerResolver(nameEthNamehash);
+        
+        vm.warp(block.timestamp + 100);
+        ensRegistry.setResolver(nameEthNamehash, resolver2);
+        registry.registerResolver(nameEthNamehash);
+        
+        vm.warp(block.timestamp + 100);
+        ensRegistry.setResolver(nameEthNamehash, resolver3);
+        registry.registerResolver(nameEthNamehash);
+        
+        // Test querying at exactly one timestamp before first entry
+        uint64 beforeFirst = uint64(block.timestamp - 201);
+        vm.expectRevert(abi.encodeWithSelector(NoResolverAtOrBeforeBlock.selector, beforeFirst));
+        registry.getResolver(nameEthNamehash, beforeFirst);
+        
+        // Test querying at timestamp between entries
+        (address midResolver,) = registry.getResolver(nameEthNamehash, uint64(block.timestamp - 50));
+        assertEq(midResolver, resolver2, "Should return correct resolver for mid-point");
+    }
+
+    function test_015____registerResolver_____________HandlesMultipleNodes() public {
+        bytes32 anotherNode = BytesUtils.namehash("\x05other\x03eth\x00", 0);
+        
+        // Set up another node
+        ensRegistry.setSubnodeOwner(ethNamehash, keccak256(bytes("other")), addr1);
+        
+        // Set resolvers for both nodes
+        ensRegistry.setResolver(nameEthNamehash, resolver);
+        ensRegistry.setResolver(anotherNode, resolver2);
+        
+        // Register resolvers for both nodes
+        registry.registerResolver(nameEthNamehash);
+        registry.registerResolver(anotherNode);
+        
+        // Verify independent tracking
+        (address resolver1,) = registry.latestResolver(nameEthNamehash);
+        (address resolver2Addr,) = registry.latestResolver(anotherNode);
+        
+        assertEq(resolver1, resolver, "Should track first node's resolver");
+        assertEq(resolver2Addr, resolver2, "Should track second node's resolver");
+    }
+
+    function test_016____registerResolver_____________HandlesLargeHistory() public {
+        uint256 numUpdates = 10; // Adjust based on gas limits
+        
+        for(uint256 i = 0; i < numUpdates; i++) {
+            vm.warp(block.timestamp + 100);
+            ensRegistry.setResolver(nameEthNamehash, address(uint160(i + 100))); // Use different addresses
+            registry.registerResolver(nameEthNamehash);
+        }
+        
+        // Verify we can access all history points
+        for(uint256 i = 0; i < numUpdates; i++) {
+            (address resolverAddr,) = registry.getResolverInfoByIndex(nameEthNamehash, i);
+            assertEq(resolverAddr, address(uint160(i + 100)), "Should maintain accurate history");
+        }
+    }
 
 }

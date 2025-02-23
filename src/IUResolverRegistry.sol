@@ -6,6 +6,7 @@ import "@ensdomains/ens-contracts/contracts/registry/ENS.sol";
 // Custom errors
 error NoResolverAtOrBeforeBlock(uint256 blockTime);
 error NotOwnerOrApprovedController();
+error InvalidResolverIndex(uint256 index, uint256 length);
 
 interface IUResolverRegistry {
     /** @notice Get the resolver at or before a specific block time
