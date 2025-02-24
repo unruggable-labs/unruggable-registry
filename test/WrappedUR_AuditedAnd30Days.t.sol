@@ -5,7 +5,7 @@ import {Test} from "forge-std/Test.sol";
 import {UResolverRegistry, IUResolverRegistry, NoResolverAtOrBeforeBlock, NotOwnerOrApprovedController} from "../src/UResolverRegistry.sol";
 import {DNSCoder} from "@unruggable-resolve/contracts/DNSCoder.sol";
 import {UR, IUR} from "@unruggable-resolve/contracts/UR.sol";
-import {WrappedUR_AuditedAnd30Days, ResolverTooNew, ResolverNotAudited} from "../src/wrappers/WrappedUR_AuditedAnd30Days.sol";
+import {WrappedUR_AuditedAnd30Days, ResolverTooNew, ResolverNotAudited, ResolverNotRegistered} from "../src/wrappers/WrappedUR_AuditedAnd30Days.sol";
 import {Lookup, Response} from "@unruggable-resolve/contracts/IUR.sol";
 import {SimpleResolver} from "../src/mocks/SimpleResolver.sol";
 import {ENS} from "@ensdomains/ens-contracts/contracts/registry/ENS.sol";
@@ -190,6 +190,102 @@ contract WrappedUR_AuditedAnd30DaysTest is Test {
 
         // expect the resolve to revert because audit ID is 0
         vm.expectRevert(ResolverNotAudited.selector);
+        wrappedUR.resolve("\x04name\x03eth\x00", calls, new string[](0));
+        vm.stopPrank();
+    }
+
+    function test_005____Resolve______________________ResolveWithZeroResolver() public {
+        vm.startPrank(addr1);
+
+        // Create a new subdomain that will have no resolver
+        bytes32 emptyNode = BytesUtils.namehash("\x05empty\x03eth\x00", 0);
+        ensRegistry.setSubnodeOwner(ethNamehash, keccak256(bytes("empty")), addr1);
+
+        // encode a addr call with coinType 60
+        bytes memory addrCall = abi.encodeCall(IAddressResolver.addr, (emptyNode, 60));
+        bytes[] memory calls = new bytes[](1);
+        calls[0] = addrCall;
+
+        // resolve should return empty results without reverting
+        (Lookup memory lookup, Response[] memory res) = wrappedUR.resolve("\x05empty\x03eth\x00", calls, new string[](0));
+        assertEq(lookup.resolver, address(0), "Resolver should be zero address");
+        assertEq(res.length, 0, "Response array should be empty");
+        vm.stopPrank();
+    }
+
+    function test_006____Resolve______________________ResolveWithMismatchedResolver() public {
+        vm.startPrank(addr1);
+
+        // Deploy a second resolver
+        SimpleResolver differentResolver = new SimpleResolver(ENS(address(ensRegistry)), addr1);
+
+        // Register the original resolver in the registry
+        registry.registerResolver(nameEthNamehash);
+        
+        // Set audit ID for both resolvers
+        auditRegistry.setAuditId(address(simpleResolver), 1);
+        auditRegistry.setAuditId(address(differentResolver), 1);
+        
+        vm.warp(block.timestamp + 30 days + 1);
+
+        // But set a different resolver in ENS
+        ensRegistry.setResolver(nameEthNamehash, address(differentResolver));
+
+        // encode a addr call with coinType 60
+        bytes memory addrCall = abi.encodeCall(IAddressResolver.addr, (nameEthNamehash, 60));
+        bytes[] memory calls = new bytes[](1);
+        calls[0] = addrCall;
+
+        // expect revert because resolver mismatch
+        vm.expectRevert(ResolverNotRegistered.selector);
+        wrappedUR.resolve("\x04name\x03eth\x00", calls, new string[](0));
+        vm.stopPrank();
+    }
+
+    function test_007____Resolve______________________ResolveWithMultipleCalls() public {
+        vm.startPrank(addr1);
+
+        // add resolver to registry
+        registry.registerResolver(nameEthNamehash);
+        auditRegistry.setAuditId(address(simpleResolver), 1);
+        vm.warp(block.timestamp + 30 days + 1);
+
+        // Set addresses for multiple coin types
+        simpleResolver.setAddr(nameEthNamehash, 60, abi.encodePacked(addr1));  // ETH
+        simpleResolver.setAddr(nameEthNamehash, 0, abi.encodePacked(addr2));   // BTC
+        
+        // Create multiple calls for different coin types
+        bytes[] memory calls = new bytes[](2);
+        calls[0] = abi.encodeCall(IAddressResolver.addr, (nameEthNamehash, 60));
+        calls[1] = abi.encodeCall(IAddressResolver.addr, (nameEthNamehash, 0));
+
+        // resolve name.eth using wrappedUR
+        (Lookup memory lookup, Response[] memory res) = wrappedUR.resolve("\x04name\x03eth\x00", calls, new string[](0));
+
+        // verify both responses
+        assertEq(res.length, 2, "Should have two responses");
+        assertEq(res[0].data, abi.encodePacked(addr1), "First response should be ETH address");
+        assertEq(res[1].data, abi.encodePacked(addr2), "Second response should be BTC address");
+        vm.stopPrank();
+    }
+
+    function test_008____Resolve______________________ResolveWithUnregisteredResolver() public {
+        vm.startPrank(addr1);
+
+        // Set resolver in ENS but don't register it in registry
+        ensRegistry.setResolver(nameEthNamehash, address(simpleResolver));
+        
+        // Set audit ID (even though not registered)
+        auditRegistry.setAuditId(address(simpleResolver), 1);
+        vm.warp(block.timestamp + 30 days + 1);
+
+        // encode a addr call with coinType 60
+        bytes memory addrCall = abi.encodeCall(IAddressResolver.addr, (nameEthNamehash, 60));
+        bytes[] memory calls = new bytes[](1);
+        calls[0] = addrCall;
+
+        // expect revert because no resolvers are available
+        vm.expectRevert(abi.encodeWithSignature("NoResolversAvailable(bytes32)", nameEthNamehash));
         wrappedUR.resolve("\x04name\x03eth\x00", calls, new string[](0));
         vm.stopPrank();
     }

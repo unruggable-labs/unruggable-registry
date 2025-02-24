@@ -1,12 +1,13 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.23;
+pragma solidity ^0.8.12;
 
-import "@ensdomains/ens-contracts/contracts/registry/ENS.sol";
+import "ens-contracts/contracts/registry/ENS.sol";
 
 // Custom errors
-error NoResolverAtOrBeforeBlock(uint256 blockTime);
+error NoResolverAtOrBeforeBlock(uint64 blockTime);
 error NotOwnerOrApprovedController();
 error InvalidResolverIndex(uint256 index, uint256 length);
+error NoResolversAvailable(bytes32 node);
 
 interface IUResolverRegistry {
     /** @notice Get the resolver at or before a specific block time

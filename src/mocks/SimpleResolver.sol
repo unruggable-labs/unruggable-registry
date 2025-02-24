@@ -98,7 +98,11 @@ contract SimpleResolver is Ownable, IAddressResolver, ITextResolver, IContentHas
             require(addr.length == 20, "Invalid address length");
             _addresses[node][coinType] = addr;
             emit AddressChanged(node, coinType, addr);
-        }
+        } else {
+            _addresses[node][coinType] = addr;
+            emit AddressChanged(node, coinType, addr);
+        }   
+
     }
 
     // Text records

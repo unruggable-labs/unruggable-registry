@@ -2,7 +2,7 @@
 pragma solidity ^0.8.23;
 
 import {Test} from "forge-std/Test.sol";
-import {UResolverRegistry, NoResolverAtOrBeforeBlock, NotOwnerOrApprovedController, InvalidResolverIndex} from "../src/UResolverRegistry.sol";
+import {UResolverRegistry, NoResolverAtOrBeforeBlock, NotOwnerOrApprovedController, InvalidResolverIndex, NoResolversAvailable} from "../src/UResolverRegistry.sol";
 import {DNSCoder} from "@unruggable-resolve/contracts/DNSCoder.sol";
 import {BytesUtils} from "../src/utils/BytesUtils.sol";
 import {ENSRegistry} from "@ensdomains/ens-contracts/contracts/registry/ENSRegistry.sol";
@@ -204,7 +204,7 @@ contract UResolverRegistryTest is Test {
     }
     
     function test_006____latestResolver_______________RevertsWhenEmpty() public {
-        vm.expectRevert("No resolvers available for this node");
+        vm.expectRevert(abi.encodeWithSelector(NoResolversAvailable.selector, nameEthNamehash));
         registry.latestResolver(nameEthNamehash);
     }
 

@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.23;
+pragma solidity ^0.8.12;
 
-import "@openzeppelin/access/AccessControl.sol";
-import "@ensdomains/ens-contracts/contracts/registry/ENS.sol";
+import "openzeppelin-contracts/contracts/access/AccessControl.sol";
+import "ens-contracts/contracts/registry/ENS.sol";
 import "./IUResolverRegistry.sol";
 
 contract UResolverRegistry is IUResolverRegistry, AccessControl {
@@ -68,7 +68,9 @@ contract UResolverRegistry is IUResolverRegistry, AccessControl {
 
     function latestResolver(bytes32 node) external view returns (address, uint64) {
         ResolverInfo[] storage resolverList = resolvers[node];
-        require(resolverList.length > 0, "No resolvers available for this node");
+        if (resolverList.length == 0) {
+            revert NoResolversAvailable(node);
+        }
 
         ResolverInfo storage lResolver = resolverList[resolverList.length - 1];
         return (lResolver.resolver, lResolver.blockTime);

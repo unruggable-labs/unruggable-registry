@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.27;
+pragma solidity ^0.8.23;
 
 // provided as an example for how to wrap the UR
 
@@ -29,7 +29,7 @@ contract WrappedUR_30DaysOldResolver is CCIPReader {
         if (lookup.resolver == address(0)) return (lookup, res);
 
         // get the latest resolver for the node
-        (address resolver, uint64 blockTime) = registry.latestResolver(lookup.node);
+        (address resolver, uint64 blockTime) = _getLatestResolver(lookup.node);
 
         // if the resolver is not the latest resolver, or it's not at least 30 days old, revert
         if (resolver != lookup.resolver) {
@@ -46,6 +46,15 @@ contract WrappedUR_30DaysOldResolver is CCIPReader {
         );
         assembly {
             return(add(v, 32), mload(v))
+        }
+    }
+
+    function _getLatestResolver(bytes32 node) internal view returns (address resolver, uint64 blockTime) {
+        try registry.latestResolver(node) returns (address r, uint64 t) {
+            resolver = r;
+            blockTime = t;
+        } catch {
+            revert ResolverNotRegistered();
         }
     }
 
